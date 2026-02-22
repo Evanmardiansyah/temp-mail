@@ -11,8 +11,6 @@
         body { font-family: 'Inter', sans-serif; background-color: #f9fafb; }
         .modal-enter { animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        
-        /* Loading Spinner */
         .spinner { border: 3px solid rgba(0,0,0,0.1); width: 24px; height: 24px; border-radius: 50%; border-left-color: #0f172a; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
@@ -28,7 +26,7 @@
         <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between mb-8">
             <div class="flex items-center space-x-3 overflow-hidden">
                 <i data-lucide="mail" class="text-slate-400 w-5 h-5 flex-shrink-0"></i>
-                <span id="email-display" class="font-medium text-lg truncate text-slate-700">Memuat...</span>
+                <span id="email-display" class="font-medium text-lg truncate text-slate-700">Menyiapkan alamat...</span>
             </div>
             <button onclick="copyEmail(event)" class="ml-4 flex items-center px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition text-sm font-medium shrink-0">
                 <i data-lucide="copy" class="w-4 h-4 mr-2"></i> Copy
@@ -52,8 +50,8 @@
     <div id="email-modal" class="fixed inset-0 bg-slate-900/60 hidden flex items-center justify-center p-4 z-50 backdrop-blur-sm">
         <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col modal-enter">
             <div class="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50 rounded-t-2xl">
-                <div class="pr-4 w-full">
-                    <h3 id="modal-subject" class="font-bold text-slate-900 text-xl mb-1 leading-tight">Memuat Subjek...</h3>
+                <div class="pr-4 w-full text-left">
+                    <h3 id="modal-subject" class="font-bold text-slate-900 text-xl mb-1 leading-tight italic">Memuat Subjek...</h3>
                     <p id="modal-sender" class="text-sm text-slate-600 font-medium">Dari: ...</p>
                 </div>
                 <button onclick="closeModal()" class="text-slate-400 hover:text-slate-800 bg-white p-2 rounded-lg shadow-sm border border-slate-200 transition shrink-0">
@@ -61,47 +59,48 @@
                 </button>
             </div>
             <div class="flex-1 relative w-full h-[65vh] bg-white rounded-b-2xl overflow-hidden">
-                <iframe id="email-iframe" class="w-full h-full border-0" sandbox="allow-same-origin allow-popups"></iframe>
+                <iframe id="email-iframe" class="w-full h-full border-0"></iframe>
             </div>
         </div>
     </div>
 
-    <script type="module">
-        import PostalMime from 'https://cdn.jsdelivr.net/npm/postal-mime@2.2.14/+esm';
-
-        // Inisialisasi Ikon
-        lucide.createIcons();
-
+    <script src="https://cdn.jsdelivr.net/npm/postal-mime@2.2.14/dist/postal-mime.js"></script>
+    
+    <script>
         // Konfigurasi API
         const DOMAIN = "evan-cloud.my.id"; 
         const WORKER_URL = "https://temp-mail-api.evanmardiansyah38.workers.dev"; 
         
         let currentEmail = "";
-        let emailsData = []; // Menyimpan data email utuh
+        let emailsData = [];
+        const parser = new PostalMime.default();
 
-        // Binding fungsi ke Window agar bisa dipanggil dari HTML
-        window.copyEmail = function(event) {
+        // Fungsi Global agar bisa diklik
+        window.copyEmail = (e) => {
             navigator.clipboard.writeText(currentEmail);
-            const btn = event.currentTarget;
+            const btn = e.currentTarget;
             const originalContent = btn.innerHTML;
             btn.innerHTML = `<i data-lucide="check" class="w-4 h-4 mr-2"></i> Tersalin`;
             lucide.createIcons();
             setTimeout(() => { btn.innerHTML = originalContent; lucide.createIcons(); }, 2000);
         };
 
-        window.openModal = function(index) {
-            const email = emailsData[index];
-            document.getElementById('modal-sender').innerText = `${email.from}`;
-            document.getElementById('modal-subject').innerText = email.parsedSubject;
-            
-            // Masukkan isi HTML email ke dalam Iframe agar desain aslinya muncul
-            document.getElementById('email-iframe').srcdoc = email.parsedHtml;
-            document.getElementById('email-modal').classList.remove('hidden');
+        window.closeModal = () => {
+            document.getElementById('email-modal').classList.add('hidden');
+            document.getElementById('email-iframe').srcdoc = "";
         };
 
-        window.closeModal = function() {
-            document.getElementById('email-modal').classList.add('hidden');
-            document.getElementById('email-iframe').srcdoc = ""; // Bersihkan memori iframe
+        window.openModal = async (index) => {
+            const email = emailsData[index];
+            document.getElementById('modal-sender').innerText = `Dari: ${email.from}`;
+            
+            // Parsing email saat diklik agar cepat di awal
+            const parsed = await parser.parse(email.raw);
+            document.getElementById('modal-subject').innerText = parsed.subject || "(Tanpa Subjek)";
+            document.getElementById('email-iframe').srcdoc = parsed.html || `<pre>${parsed.text}</pre>`;
+            
+            document.getElementById('email-modal').classList.remove('hidden');
+            lucide.createIcons();
         };
 
         function generateRandomEmail() {
@@ -109,60 +108,40 @@
             return `${randomString}@${DOMAIN}`;
         }
 
-        window.onload = () => {
-            currentEmail = generateRandomEmail();
-            document.getElementById('email-display').innerText = currentEmail;
-            fetchEmails(); 
-            setInterval(fetchEmails, 5000); 
-        };
-
         async function fetchEmails() {
             try {
-                document.getElementById('loading-indicator').classList.remove('hidden');
-                
                 const response = await fetch(`${WORKER_URL}/?email=${currentEmail}`);
                 const data = await response.json();
                 
-                const inboxList = document.getElementById('inbox-list');
-                
                 if (data.length > 0 && data.length !== emailsData.length) {
-                    const parser = new PostalMime();
-                    emailsData = data.reverse(); 
+                    emailsData = data.reverse();
+                    const inboxList = document.getElementById('inbox-list');
+                    inboxList.innerHTML = '';
                     
-                    let htmlBuilder = "";
-                    
-                    // Ekstrak isi email satu per satu
-                    for (let i = 0; i < emailsData.length; i++) {
-                        const email = emailsData[i];
+                    emailsData.forEach((email, index) => {
                         const time = new Date(email.date).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
-                        
-                        // Membedah kode MIME yang rumit menjadi bagian rapi (Subject & Body)
-                        const parsed = await parser.parse(email.raw);
-                        email.parsedSubject = parsed.subject || "(Tanpa Subjek)";
-                        email.parsedHtml = parsed.html || parsed.text || "<p>Email ini tidak memiliki teks yang bisa dibaca.</p>";
-
-                        htmlBuilder += `
-                            <li onclick="openModal(${i})" class="p-5 hover:bg-slate-50 transition cursor-pointer border-b border-slate-100 last:border-0 group">
-                                <div class="flex justify-between items-baseline mb-2">
+                        inboxList.innerHTML += `
+                            <li onclick="openModal(${index})" class="p-5 hover:bg-slate-50 transition cursor-pointer border-b border-slate-100 last:border-0 group text-left">
+                                <div class="flex justify-between items-baseline mb-1">
                                     <span class="font-semibold text-slate-800 group-hover:text-blue-600 transition truncate pr-4">${email.from}</span>
                                     <span class="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-md shrink-0">${time}</span>
                                 </div>
-                                <div class="flex items-center text-sm text-slate-600">
-                                    <span class="font-medium truncate">${email.parsedSubject}</span>
-                                </div>
+                                <p class="text-sm text-slate-500 truncate italic">Klik untuk melihat detail pesan...</p>
                             </li>
                         `;
-                    }
-                    
-                    inboxList.innerHTML = htmlBuilder;
+                    });
                     lucide.createIcons();
                 }
-            } catch (error) {
-                console.error("Menunggu email masuk...", error);
-            } finally {
-                document.getElementById('loading-indicator').classList.add('hidden');
-            }
+            } catch (e) { console.log("Menunggu..."); }
         }
+
+        window.onload = () => {
+            currentEmail = generateRandomEmail();
+            document.getElementById('email-display').innerText = currentEmail;
+            lucide.createIcons();
+            fetchEmails();
+            setInterval(fetchEmails, 5000);
+        };
     </script>
 </body>
 </html>
