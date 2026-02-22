@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimal Temp Mail</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f9fafb; }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col items-center pt-20 px-4">
+
+    <div class="w-full max-w-2xl">
+        <div class="text-center mb-10">
+            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">Disposable Email</h1>
+            <p class="text-slate-500 mt-2 text-sm">Alamat email sementara Anda. Otomatis terhapus dalam 1 jam.</p>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between mb-8">
+            <div class="flex items-center space-x-3 overflow-hidden">
+                <i data-lucide="mail" class="text-slate-400 w-5 h-5 flex-shrink-0"></i>
+                <span id="email-display" class="font-medium text-lg truncate">Memuat...</span>
+            </div>
+            <button onclick="copyEmail()" class="ml-4 flex items-center px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition text-sm font-medium shrink-0">
+                <i data-lucide="copy" class="w-4 h-4 mr-2"></i> Copy
+            </button>
+        </div>
+
+        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Kotak Masuk</h2>
+        
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <ul id="inbox-list" class="divide-y divide-slate-100">
+                <li class="p-8 text-center text-slate-500 flex flex-col items-center">
+                    <i data-lucide="inbox" class="w-8 h-8 mb-3 text-slate-300"></i>
+                    <p class="text-sm">Menunggu email masuk...</p>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Inisialisasi Ikon
+        lucide.createIcons();
+
+        // Kofigurasi Domain & Worker API yang sudah di-update
+        const DOMAIN = "evan-cloud.my.id"; 
+        const WORKER_URL = "https://temp-mail-api.evanmardiansyah38.workers.dev"; 
+        
+        let currentEmail = "";
+
+        // Fungsi generate string acak (6 karakter)
+        function generateRandomEmail() {
+            const randomString = Math.random().toString(36).substring(2, 8);
+            return `${randomString}@${DOMAIN}`;
+        }
+
+        // Set email saat load
+        window.onload = () => {
+            currentEmail = generateRandomEmail();
+            document.getElementById('email-display').innerText = currentEmail;
+            fetchEmails(); // Tarik email pertama kali
+            setInterval(fetchEmails, 5000); // Auto-refresh tiap 5 detik
+        };
+
+        // Fungsi Copy ke Clipboard
+        function copyEmail() {
+            navigator.clipboard.writeText(currentEmail);
+            
+            // Ubah teks tombol sementara saat dicopy
+            const btn = event.currentTarget;
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="check" class="w-4 h-4 mr-2"></i> Tersalin`;
+            lucide.createIcons(); // render ulang ikon
+            
+            setTimeout(() => {
+                btn.innerHTML = originalContent;
+                lucide.createIcons();
+            }, 2000);
+        }
+
+        // Fungsi fetch API ke Cloudflare Worker
+        async function fetchEmails() {
+            try {
+                const response = await fetch(`${WORKER_URL}/?email=${currentEmail}`);
+                const data = await response.json();
+                
+                const inboxList = document.getElementById('inbox-list');
+                
+                if (data.length > 0) {
+                    inboxList.innerHTML = ''; // Bersihkan tulisan "Menunggu email masuk..."
+                    data.reverse().forEach(email => {
+                        inboxList.innerHTML += `
+                            <li class="p-4 hover:bg-slate-50 transition cursor-pointer border-b border-slate-100 last:border-0">
+                                <div class="flex justify-between items-baseline mb-1">
+                                    <span class="font-medium text-sm text-slate-900">${email.from}</span>
+                                    <span class="text-xs text-slate-400">Baru saja</span>
+                                </div>
+                                <p class="text-sm text-slate-600 truncate">Email diterima (Teks mentah. Buka console untuk detail).</p>
+                            </li>
+                        `;
+                    });
+                }
+            } catch (error) {
+                console.error("Menunggu email / Gagal menarik data:", error);
+            }
+        }
+    </script>
+</body>
+</html>
