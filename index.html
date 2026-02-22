@@ -3,146 +3,566 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minimal Temp Mail</title>
+    <title>Temp Mail - Disposable Email Address</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/postal-mime@2.2.14/dist/postal-mime.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #f9fafb; }
-        .modal-enter { animation: fadeIn 0.2s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .btn-action {
+            transition: all 0.2s ease;
+        }
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .btn-action:active {
+            transform: translateY(0);
+        }
+        .email-item {
+            transition: all 0.2s ease;
+        }
+        .email-item:hover {
+            background-color: #f8fafc;
+            transform: translateX(4px);
+        }
+        .modal-enter {
+            animation: modalFadeIn 0.3s ease-out;
+        }
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .empty-state-icon {
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a1a1a1;
+        }
     </style>
+<base target="_blank">
 </head>
-<body class="text-slate-800 antialiased min-h-screen flex flex-col items-center pt-20 px-4 pb-10">
+<body class="antialiased py-8 px-4">
 
-    <div class="w-full max-w-2xl">
-        <div class="text-center mb-10">
-            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">Disposable Email</h1>
-            <p class="text-slate-500 mt-2 text-sm">Alamat email sementara Anda. Otomatis terhapus dalam 1 jam.</p>
-        </div>
-
-        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between mb-8">
-            <div class="flex items-center space-x-3 overflow-hidden">
-                <i data-lucide="mail" class="text-slate-400 w-5 h-5 flex-shrink-0"></i>
-                <span id="email-display" class="font-medium text-lg truncate text-slate-700">Menyiapkan...</span>
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-2xl mb-4 backdrop-blur-sm">
+                <i data-lucide="mail" class="w-8 h-8 text-white"></i>
             </div>
-            <button onclick="copyEmail()" class="ml-4 flex items-center px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition text-sm font-medium shrink-0">
-                <i data-lucide="copy" class="w-4 h-4 mr-2"></i> Copy
-            </button>
+            <h1 class="text-3xl md:text-4xl font-bold text-white mb-2">Temporary Email</h1>
+            <p class="text-white/80 text-sm md:text-base">Secure, anonymous, disposable email address. Auto-deleted in 1 hour.</p>
         </div>
 
-        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Kotak Masuk</h2>
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <ul id="inbox-list" class="divide-y divide-slate-100">
-                <li class="p-8 text-center text-slate-500 flex flex-col items-center">
-                    <i data-lucide="inbox" class="w-8 h-8 mb-3 text-slate-300"></i>
-                    <p class="text-sm">Menunggu email masuk...</p>
-                </li>
-            </ul>
+        <!-- Email Address Card -->
+        <div class="glass-card rounded-2xl p-6 mb-6 shadow-xl">
+            <label class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">Your Email Address</label>
+            <div class="flex flex-col md:flex-row gap-3">
+                <div class="flex-1 flex items-center bg-gray-50 rounded-xl px-4 py-3 border border-gray-200">
+                    <i data-lucide="at-sign" class="w-5 h-5 text-gray-400 mr-3 flex-shrink-0"></i>
+                    <span id="email-display" class="font-mono text-lg text-gray-800 truncate">Memuat...</span>
+                    <div id="loading-spinner" class="ml-auto hidden">
+                        <i data-lucide="loader-2" class="w-5 h-5 text-blue-500 animate-spin"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex flex-wrap gap-3 mt-4 justify-center md:justify-start">
+                <button onclick="copyEmail()" class="btn-action flex items-center px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium text-sm">
+                    <i data-lucide="copy" class="w-4 h-4 mr-2"></i>
+                    <span id="copy-text">Copy</span>
+                </button>
+                <button onclick="refreshInbox()" class="btn-action flex items-center px-5 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-medium text-sm">
+                    <i data-lucide="refresh-cw" class="w-4 h-4 mr-2" id="refresh-icon"></i>
+                    <span>Refresh Inbox</span>
+                </button>
+                <button onclick="changeEmail()" class="btn-action flex items-center px-5 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 font-medium text-sm">
+                    <i data-lucide="shuffle" class="w-4 h-4 mr-2"></i>
+                    <span>Change Email</span>
+                </button>
+                <button onclick="deleteEmail()" class="btn-action flex items-center px-5 py-2.5 bg-rose-600 text-white rounded-xl hover:bg-rose-700 font-medium text-sm">
+                    <i data-lucide="trash-2" class="w-4 h-4 mr-2"></i>
+                    <span>Delete</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Inbox Section -->
+        <div class="glass-card rounded-2xl shadow-xl overflow-hidden">
+            <!-- Inbox Header -->
+            <div class="bg-gray-50/80 px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="inbox" class="w-5 h-5 text-gray-600"></i>
+                    <h2 class="font-semibold text-gray-800">Your Inbox</h2>
+                    <span id="email-count" class="bg-blue-100 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-full">0</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-500">Auto-refresh</span>
+                    <div class="w-2 h-2 bg-green-500 rounded-full pulse-dot"></div>
+                </div>
+            </div>
+
+            <!-- Inbox Table Header -->
+            <div class="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-gray-100/50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <div class="col-span-3">Sender</div>
+                <div class="col-span-6">Subject</div>
+                <div class="col-span-2">Time</div>
+                <div class="col-span-1 text-center">Action</div>
+            </div>
+
+            <!-- Inbox List -->
+            <div id="inbox-list" class="divide-y divide-gray-100">
+                <!-- Empty State -->
+                <div id="empty-state" class="py-16 text-center">
+                    <div class="empty-state-icon inline-flex items-center justify-center w-20 h-20 bg-blue-50 rounded-full mb-4">
+                        <i data-lucide="mail-open" class="w-10 h-10 text-blue-400"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-700 mb-1">Your inbox is empty</h3>
+                    <p class="text-sm text-gray-500">Awaiting incoming emails...</p>
+                </div>
+            </div>
+
+            <!-- Inbox Footer Actions -->
+            <div class="bg-gray-50/80 px-6 py-4 border-t border-gray-200 flex justify-center gap-3">
+                <button onclick="copyEmail()" class="btn-action flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-sm">
+                    <i data-lucide="copy" class="w-4 h-4 mr-2"></i>
+                    Copy
+                </button>
+                <button onclick="refreshInbox()" class="btn-action flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-sm">
+                    <i data-lucide="refresh-cw" class="w-4 h-4 mr-2"></i>
+                    Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- Info Cards -->
+        <div class="grid md:grid-cols-3 gap-4 mt-6">
+            <div class="glass-card rounded-xl p-4 text-center">
+                <i data-lucide="shield-check" class="w-8 h-8 text-green-500 mx-auto mb-2"></i>
+                <h3 class="font-semibold text-gray-800 text-sm">Secure</h3>
+                <p class="text-xs text-gray-600 mt-1">Your emails are encrypted and secure</p>
+            </div>
+            <div class="glass-card rounded-xl p-4 text-center">
+                <i data-lucide="clock" class="w-8 h-8 text-orange-500 mx-auto mb-2"></i>
+                <h3 class="font-semibold text-gray-800 text-sm">Temporary</h3>
+                <p class="text-xs text-gray-600 mt-1">Auto-deleted after 1 hour</p>
+            </div>
+            <div class="glass-card rounded-xl p-4 text-center">
+                <i data-lucide="user-x" class="w-8 h-8 text-purple-500 mx-auto mb-2"></i>
+                <h3 class="font-semibold text-gray-800 text-sm">Anonymous</h3>
+                <p class="text-xs text-gray-600 mt-1">No registration required</p>
+            </div>
         </div>
     </div>
 
-    <div id="email-modal" class="fixed inset-0 bg-slate-900/60 hidden flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-        <div class="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col modal-enter">
-            <div class="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50 rounded-t-2xl">
-                <div class="pr-6 overflow-hidden">
-                    <h3 id="modal-subject" class="font-bold text-slate-900 text-lg truncate mb-1">Subjek Email</h3>
-                    <p id="modal-sender" class="text-sm text-slate-500 font-medium">Dari: ...</p>
+    <!-- Email Detail Modal -->
+    <div id="email-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col modal-enter">
+            <!-- Modal Header -->
+            <div class="p-5 border-b border-gray-200 flex justify-between items-start bg-gray-50 rounded-t-2xl">
+                <div class="flex-1 pr-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded">From</span>
+                        <span id="modal-sender" class="text-sm text-gray-700 font-medium">...</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="bg-gray-100 text-gray-600 text-xs font-semibold px-2 py-1 rounded">Subject</span>
+                        <span id="modal-subject" class="text-sm text-gray-800 font-semibold">...</span>
+                    </div>
+                    <div class="flex items-center gap-2 mt-2">
+                        <span class="bg-green-100 text-green-700 text-xs font-semibold px-2 py-1 rounded">To</span>
+                        <span id="modal-to" class="text-xs text-gray-500">...</span>
+                    </div>
                 </div>
-                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-800 bg-white p-2 rounded-lg shadow-sm border border-slate-200 transition">
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-700 bg-white p-2 rounded-lg shadow-sm border border-gray-200 transition flex-shrink-0">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <div class="p-0 overflow-hidden bg-white flex-1 relative rounded-b-2xl" style="min-height: 400px;">
-                <iframe id="email-body-frame" class="w-full h-full border-0"></iframe>
+            
+            <!-- Modal Body -->
+            <div class="p-6 overflow-y-auto flex-1 bg-white">
+                <div class="flex items-center justify-between mb-4">
+                    <span id="modal-date" class="text-xs text-gray-500"></span>
+                    <button onclick="copyEmailContent()" class="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700 font-medium">
+                        <i data-lucide="copy" class="w-3 h-3"></i>
+                        Copy Content
+                    </button>
+                </div>
+                <div id="email-content" class="prose prose-sm max-w-none text-gray-700 leading-relaxed">
+                    Memuat isi pesan...
+                </div>
+            </div>
+            
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl flex justify-end gap-3">
+                <button onclick="closeModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium text-sm">Close</button>
+                <button onclick="copyEmailContent()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm flex items-center gap-2">
+                    <i data-lucide="copy" class="w-4 h-4"></i>
+                    Copy Content
+                </button>
             </div>
         </div>
     </div>
 
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 text-white px-4 py-3 rounded-xl shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-2">
+        <i data-lucide="check-circle" class="w-5 h-5 text-green-400"></i>
+        <span id="toast-message">Success!</span>
+    </div>
+
     <script>
-        // Konfigurasi
+        lucide.createIcons();
+
+        // Konfigurasi API
         const DOMAIN = "evan-cloud.my.id"; 
         const WORKER_URL = "https://temp-mail-api.evanmardiansyah38.workers.dev"; 
+        
         let currentEmail = "";
         let emailsData = [];
-        const parser = new PostalMime.default();
+        let autoRefreshInterval;
 
         function generateRandomEmail() {
-            const randomString = Math.random().toString(36).substring(2, 8);
+            const randomString = Math.random().toString(36).substring(2, 10);
             return `${randomString}@${DOMAIN}`;
         }
 
-        window.copyEmail = () => {
+        function init() {
+            currentEmail = generateRandomEmail();
+            document.getElementById('email-display').innerText = currentEmail;
+            fetchEmails();
+            startAutoRefresh();
+        }
+
+        function startAutoRefresh() {
+            // Auto refresh setiap 10 detik
+            autoRefreshInterval = setInterval(fetchEmails, 10000);
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            toastMessage.textContent = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+                toast.classList.remove('translate-y-0', 'opacity-100');
+            }, 2500);
+        }
+
+        function copyEmail() {
             navigator.clipboard.writeText(currentEmail);
-            const btn = event.currentTarget;
-            const originalContent = btn.innerHTML;
-            btn.innerHTML = `<i data-lucide="check" class="w-4 h-4 mr-2"></i> Tersalin`;
-            lucide.createIcons();
-            setTimeout(() => { btn.innerHTML = originalContent; lucide.createIcons(); }, 2000);
-        };
-
-        window.closeModal = () => {
-            document.getElementById('email-modal').classList.add('hidden');
-            document.getElementById('email-body-frame').srcdoc = "";
-        };
-
-        // Fungsi utama untuk membedah email RAW menjadi tampilan CANTIK
-        window.openModal = async (index) => {
-            const rawEmail = emailsData[index].raw;
-            const sender = emailsData[index].from;
+            showToast('Email address copied!');
             
-            document.getElementById('modal-sender').innerText = `Dari: ${sender}`;
+            const copyText = document.getElementById('copy-text');
+            const originalText = copyText.textContent;
+            copyText.textContent = 'Copied!';
+            setTimeout(() => {
+                copyText.textContent = originalText;
+            }, 2000);
+        }
+
+        function copyEmailContent() {
+            const content = document.getElementById('email-content').innerText;
+            navigator.clipboard.writeText(content);
+            showToast('Email content copied!');
+        }
+
+        async function refreshInbox() {
+            const refreshIcon = document.getElementById('refresh-icon');
+            refreshIcon.classList.add('animate-spin');
+            
+            await fetchEmails();
+            
+            setTimeout(() => {
+                refreshIcon.classList.remove('animate-spin');
+            }, 500);
+            
+            showToast('Inbox refreshed!');
+        }
+
+        function changeEmail() {
+            if (confirm('Are you sure you want to change your email address? Current emails will be lost.')) {
+                currentEmail = generateRandomEmail();
+                document.getElementById('email-display').innerText = currentEmail;
+                emailsData = [];
+                renderInbox();
+                showToast('Email address changed!');
+            }
+        }
+
+        function deleteEmail() {
+            if (confirm('Are you sure you want to delete this email? All messages will be lost.')) {
+                currentEmail = generateRandomEmail();
+                document.getElementById('email-display').innerText = currentEmail;
+                emailsData = [];
+                renderInbox();
+                showToast('Email deleted! New email generated.');
+            }
+        }
+
+        function parseEmailContent(rawEmail) {
+            // Parse raw email untuk mendapatkan body
+            let body = '';
+            let subject = '';
+            let from = '';
+            let to = '';
+            
+            // Split by lines
+            const lines = rawEmail.split('\n');
+            let isBody = false;
+            let contentType = '';
+            
+            for (let line of lines) {
+                // Parse headers
+                if (line.toLowerCase().startsWith('from:')) {
+                    from = line.substring(5).trim();
+                } else if (line.toLowerCase().startsWith('to:')) {
+                    to = line.substring(3).trim();
+                } else if (line.toLowerCase().startsWith('subject:')) {
+                    subject = line.substring(8).trim();
+                } else if (line.toLowerCase().startsWith('content-type:')) {
+                    contentType = line.toLowerCase();
+                }
+                
+                // Check for body start (empty line after headers)
+                if (line.trim() === '' && !isBody) {
+                    isBody = true;
+                    continue;
+                }
+                
+                // Collect body content
+                if (isBody) {
+                    body += line + '\n';
+                }
+            }
+            
+            // Clean up body - remove encoding info
+            body = body.replace(/Content-Transfer-Encoding:.*/gi, '');
+            body = body.replace(/Content-Type:.*/gi, '');
+            body = body.replace(/boundary=.*/gi, '');
+            body = body.replace(/--[\w=]+(--)?/g, '');
+            body = body.trim();
+            
+            // Try to extract plain text from HTML if present
+            if (contentType.includes('text/html')) {
+                // Remove HTML tags for plain text view
+                body = body.replace(/<[^>]*>/g, ' ');
+                body = body.replace(/&nbsp;/g, ' ');
+                body = body.replace(/&amp;/g, '&');
+                body = body.replace(/&lt;/g, '<');
+                body = body.replace(/&gt;/g, '>');
+                body = body.replace(/\s+/g, ' ').trim();
+            }
+            
+            // Decode base64 if needed (simple check)
+            if (contentType.includes('base64')) {
+                try {
+                    body = atob(body.replace(/\s/g, ''));
+                } catch (e) {
+                    // Keep original if decode fails
+                }
+            }
+            
+            return { body, subject, from, to };
+        }
+
+        function renderInbox() {
+            const inboxList = document.getElementById('inbox-list');
+            const emailCount = document.getElementById('email-count');
+            
+            emailCount.textContent = emailsData.length;
+            
+            if (emailsData.length === 0) {
+                inboxList.innerHTML = `
+                    <div id="empty-state" class="py-16 text-center">
+                        <div class="empty-state-icon inline-flex items-center justify-center w-20 h-20 bg-blue-50 rounded-full mb-4">
+                            <i data-lucide="mail-open" class="w-10 h-10 text-blue-400"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-700 mb-1">Your inbox is empty</h3>
+                        <p class="text-sm text-gray-500">Awaiting incoming emails...</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+            
+            inboxList.innerHTML = '';
+            
+            emailsData.forEach((email, index) => {
+                const parsed = parseEmailContent(email.raw);
+                const time = new Date(email.date).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
+                const date = new Date(email.date).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'});
+                
+                // Extract sender name/email
+                let senderDisplay = parsed.from || email.from;
+                senderDisplay = senderDisplay.replace(/<[^>]+>/g, '').trim() || senderDisplay;
+                if (senderDisplay.length > 25) {
+                    senderDisplay = senderDisplay.substring(0, 25) + '...';
+                }
+                
+                // Extract subject
+                let subjectDisplay = parsed.subject || '(No Subject)';
+                if (subjectDisplay.length > 50) {
+                    subjectDisplay = subjectDisplay.substring(0, 50) + '...';
+                }
+                
+                const emailItem = document.createElement('div');
+                emailItem.className = 'email-item p-4 cursor-pointer border-b border-gray-100 last:border-0';
+                emailItem.onclick = () => openModal(index);
+                
+                emailItem.innerHTML = `
+                    <!-- Mobile View -->
+                    <div class="md:hidden">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                    <i data-lucide="user" class="w-4 h-4 text-blue-600"></i>
+                                </div>
+                                <span class="font-semibold text-gray-800 text-sm">${senderDisplay}</span>
+                            </div>
+                            <span class="text-xs text-gray-400">${time}</span>
+                        </div>
+                        <p class="text-sm text-gray-600 ml-10">${subjectDisplay}</p>
+                    </div>
+                    
+                    <!-- Desktop View -->
+                    <div class="hidden md:grid grid-cols-12 gap-4 items-center">
+                        <div class="col-span-3 flex items-center gap-2">
+                            <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <i data-lucide="user" class="w-4 h-4 text-blue-600"></i>
+                            </div>
+                            <span class="font-medium text-gray-800 text-sm truncate">${senderDisplay}</span>
+                        </div>
+                        <div class="col-span-6">
+                            <p class="text-sm text-gray-700 font-medium truncate">${subjectDisplay}</p>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="text-xs text-gray-500">${date} ${time}</span>
+                        </div>
+                        <div class="col-span-1 text-center">
+                            <button class="p-2 hover:bg-gray-100 rounded-lg transition">
+                                <i data-lucide="eye" class="w-4 h-4 text-blue-600"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                inboxList.appendChild(emailItem);
+            });
+            
+            lucide.createIcons();
+        }
+
+        function openModal(index) {
+            const email = emailsData[index];
+            const parsed = parseEmailContent(email.raw);
+            
+            document.getElementById('modal-sender').innerText = parsed.from || email.from;
+            document.getElementById('modal-subject').innerText = parsed.subject || '(No Subject)';
+            document.getElementById('modal-to').innerText = parsed.to || currentEmail;
+            
+            const date = new Date(email.date).toLocaleString('id-ID', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            document.getElementById('modal-date').innerText = date;
+            
+            // Format body with proper line breaks
+            const formattedBody = parsed.body
+                .replace(/\n/g, '<br>')
+                .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
+            
+            document.getElementById('email-content').innerHTML = formattedBody || '<em class="text-gray-400">No content</em>';
             document.getElementById('email-modal').classList.remove('hidden');
-            
-            // Proses membedah email
-            const parsed = await parser.parse(rawEmail);
-            
-            document.getElementById('modal-subject').innerText = parsed.subject || "(Tanpa Subjek)";
-            
-            // Masukkan isi HTML email ke dalam iframe
-            const content = parsed.html || `<div style="font-family:sans-serif;padding:20px;">${parsed.text}</div>`;
-            document.getElementById('email-body-frame').srcdoc = content;
-            
-            lucide.createIcons();
-        };
+            document.getElementById('email-modal').classList.add('flex');
+        }
+
+        function closeModal() {
+            document.getElementById('email-modal').classList.add('hidden');
+            document.getElementById('email-modal').classList.remove('flex');
+        }
 
         async function fetchEmails() {
             try {
                 const response = await fetch(`${WORKER_URL}/?email=${currentEmail}`);
                 const data = await response.json();
-                const inboxList = document.getElementById('inbox-list');
                 
-                if (data.length > 0 && data.length !== emailsData.length) {
+                if (data.length > 0) {
+                    // Check if there are new emails
+                    const hasNewEmails = data.length > emailsData.length;
                     emailsData = data.reverse();
-                    inboxList.innerHTML = ''; 
+                    renderInbox();
                     
-                    emailsData.forEach((email, index) => {
-                        const time = new Date(email.date).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
-                        inboxList.innerHTML += `
-                            <li onclick="openModal(${index})" class="p-5 hover:bg-slate-50 transition cursor-pointer border-b border-slate-100 last:border-0 group">
-                                <div class="flex justify-between items-baseline mb-1">
-                                    <span class="font-semibold text-slate-800 group-hover:text-blue-600 transition">${email.from}</span>
-                                    <span class="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-md">${time}</span>
-                                </div>
-                                <div class="text-sm text-slate-500 truncate">
-                                    Klik untuk membaca isi pesan...
-                                </div>
-                            </li>
-                        `;
-                    });
-                    lucide.createIcons();
+                    if (hasNewEmails) {
+                        showToast(`${data.length - (emailsData.length - data.length)} new email(s) received!`);
+                    }
                 }
-            } catch (error) { console.log("Menunggu email..."); }
+            } catch (error) {
+                console.error("Gagal menarik data:", error);
+            }
         }
 
-        window.onload = () => {
-            currentEmail = generateRandomEmail();
-            document.getElementById('email-display').innerText = currentEmail;
-            lucide.createIcons();
-            fetchEmails();
-            setInterval(fetchEmails, 5000); 
-        };
+        // Close modal when clicking outside
+        document.getElementById('email-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // Initialize on load
+        window.onload = init;
     </script>
 </body>
 </html>
