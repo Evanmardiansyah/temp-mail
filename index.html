@@ -341,34 +341,74 @@
             }
         }
 
+        // Decode quoted-printable encoding
+        function decodeQuotedPrintable(text) {
+            // Remove soft line breaks (= at end of line followed by newline)
+            text = text.replace(/=\r?\n/g, '');
+            
+            // Decode hex sequences (=XX where XX is hex)
+            text = text.replace(/=([0-9A-Fa-f]{2})/g, (match, hex) => {
+                return String.fromCharCode(parseInt(hex, 16));
+            });
+            
+            return text;
+        }
+
+        // Decode base64 content
+        function decodeBase64(text) {
+            try {
+                // Remove whitespace and decode
+                const cleanText = text.replace(/\s/g, '');
+                return atob(cleanText);
+            } catch (e) {
+                return text;
+            }
+        }
+
         function parseEmailContent(rawEmail) {
             // Parse raw email untuk mendapatkan body
             let body = '';
             let subject = '';
             let from = '';
             let to = '';
+            let contentTransferEncoding = '';
+            let contentType = '';
+            let isMultipart = false;
+            let boundary = '';
             
             // Split by lines
             const lines = rawEmail.split('\n');
             let isBody = false;
-            let contentType = '';
+            let headerSection = true;
             
             for (let line of lines) {
                 // Parse headers
-                if (line.toLowerCase().startsWith('from:')) {
-                    from = line.substring(5).trim();
-                } else if (line.toLowerCase().startsWith('to:')) {
-                    to = line.substring(3).trim();
-                } else if (line.toLowerCase().startsWith('subject:')) {
-                    subject = line.substring(8).trim();
-                } else if (line.toLowerCase().startsWith('content-type:')) {
-                    contentType = line.toLowerCase();
-                }
-                
-                // Check for body start (empty line after headers)
-                if (line.trim() === '' && !isBody) {
-                    isBody = true;
-                    continue;
+                if (headerSection) {
+                    if (line.toLowerCase().startsWith('from:')) {
+                        from = line.substring(5).trim();
+                    } else if (line.toLowerCase().startsWith('to:')) {
+                        to = line.substring(3).trim();
+                    } else if (line.toLowerCase().startsWith('subject:')) {
+                        subject = line.substring(8).trim();
+                    } else if (line.toLowerCase().startsWith('content-type:')) {
+                        contentType = line.toLowerCase();
+                        if (contentType.includes('multipart')) {
+                            isMultipart = true;
+                            const boundaryMatch = line.match(/boundary=["']?([^"';\s]+)["']?/i);
+                            if (boundaryMatch) {
+                                boundary = boundaryMatch[1];
+                            }
+                        }
+                    } else if (line.toLowerCase().startsWith('content-transfer-encoding:')) {
+                        contentTransferEncoding = line.toLowerCase();
+                    }
+                    
+                    // Check for end of headers
+                    if (line.trim() === '') {
+                        headerSection = false;
+                        isBody = true;
+                        continue;
+                    }
                 }
                 
                 // Collect body content
@@ -377,32 +417,82 @@
                 }
             }
             
-            // Clean up body - remove encoding info
-            body = body.replace(/Content-Transfer-Encoding:.*/gi, '');
-            body = body.replace(/Content-Type:.*/gi, '');
+            // Handle multipart emails - extract text/plain or text/html part
+            if (isMultipart && boundary) {
+                const parts = body.split('--' + boundary);
+                for (let part of parts) {
+                    if (part.toLowerCase().includes('content-type: text/plain')) {
+                        body = part;
+                        // Re-parse encoding for this part
+                        const encodingMatch = part.match(/content-transfer-encoding:\s*(.+)/i);
+                        if (encodingMatch) {
+                            contentTransferEncoding = encodingMatch[1].toLowerCase().trim();
+                        }
+                        break;
+                    } else if (part.toLowerCase().includes('content-type: text/html') && !body.includes('content-type: text/plain')) {
+                        body = part;
+                        const encodingMatch = part.match(/content-transfer-encoding:\s*(.+)/i);
+                        if (encodingMatch) {
+                            contentTransferEncoding = encodingMatch[1].toLowerCase().trim();
+                        }
+                    }
+                }
+            }
+            
+            // Remove headers from body
+            body = body.replace(/content-transfer-encoding:.*/gi, '');
+            body = body.replace(/content-type:.*/gi, '');
             body = body.replace(/boundary=.*/gi, '');
             body = body.replace(/--[\w=]+(--)?/g, '');
+            body = body.replace(/charset=["']?[^"';\s]+["']?/gi, '');
             body = body.trim();
             
+            // Decode based on content transfer encoding
+            if (contentTransferEncoding.includes('quoted-printable')) {
+                body = decodeQuotedPrintable(body);
+                subject = decodeQuotedPrintable(subject);
+            } else if (contentTransferEncoding.includes('base64')) {
+                body = decodeBase64(body);
+            }
+            
+            // Also check if subject is encoded (RFC 2047)
+            // Format: =?charset?encoding?encoded-text?=
+            const subjectMatch = subject.match(/=\?([^?]+)\?([BQ])\?([^?]+)\?=/i);
+            if (subjectMatch) {
+                const encoding = subjectMatch[2].toUpperCase();
+                const encodedText = subjectMatch[3];
+                if (encoding === 'B') {
+                    // Base64 encoded subject
+                    try {
+                        subject = decodeBase64(encodedText);
+                    } catch (e) {
+                        // Keep original if decode fails
+                    }
+                } else if (encoding === 'Q') {
+                    // Quoted-printable encoded subject
+                    subject = decodeQuotedPrintable(encodedText);
+                }
+            }
+            
             // Try to extract plain text from HTML if present
-            if (contentType.includes('text/html')) {
+            if (contentType.includes('text/html') || body.includes('<html') || body.includes('<body')) {
                 // Remove HTML tags for plain text view
                 body = body.replace(/<[^>]*>/g, ' ');
                 body = body.replace(/&nbsp;/g, ' ');
                 body = body.replace(/&amp;/g, '&');
                 body = body.replace(/&lt;/g, '<');
                 body = body.replace(/&gt;/g, '>');
+                body = body.replace(/&quot;/g, '"');
+                body = body.replace(/&#39;/g, "'");
                 body = body.replace(/\s+/g, ' ').trim();
             }
             
-            // Decode base64 if needed (simple check)
-            if (contentType.includes('base64')) {
-                try {
-                    body = atob(body.replace(/\s/g, ''));
-                } catch (e) {
-                    // Keep original if decode fails
-                }
-            }
+            // Clean up any remaining quoted-printable artifacts
+            body = body.replace(/=3D/g, '=');
+            body = body.replace(/=20/g, ' ');
+            body = body.replace(/=09/g, '\t');
+            body = body.replace(/=0A/gi, '\n');
+            body = body.replace(/=0D/gi, '\r');
             
             return { body, subject, from, to };
         }
